@@ -34,7 +34,7 @@ export default function handler(
     } catch (error) {
       console.error('POST /api/entries error:', error)
       const message = error instanceof Error ? error.message : 'Failed to create entry'
-      res.status(400).json({ error: message })
+      res.status(500).json({ error: message })
     }
     return
   }

@@ -1,33 +1,56 @@
 import Database from 'better-sqlite3'
 import path from 'node:path'
 import fs from 'node:fs'
+import os from 'node:os'
 
-const DB_PATH = process.env.SQLITE_DB_PATH || path.join(process.cwd(), 'data', 'db.sqlite')
+// Use Railway's mounted volume, fallback to temp directory, then current dir
+const DB_PATH = process.env.SQLITE_DB_PATH || path.join(os.tmpdir(), 'db.sqlite')
 
 let db: Database.Database | null = null
 
 function initDb() {
   if (db) return db
 
+  console.log('[DB] Initializing database at:', DB_PATH)
+  console.log('[DB] Volume mount exists:', fs.existsSync(path.dirname(DB_PATH)))
+
   // Ensure the directory exists
   const dbDir = path.dirname(DB_PATH)
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true })
+  try {
+    if (!fs.existsSync(dbDir)) {
+      console.log('[DB] Creating directory:', dbDir)
+      fs.mkdirSync(dbDir, { recursive: true })
+    }
+    
+    // Check write permissions
+    fs.accessSync(dbDir, fs.constants.W_OK)
+    console.log('[DB] Directory is writable')
+  } catch (err) {
+    console.error('[DB] Cannot write to directory:', dbDir, err)
+    throw new Error(`Cannot write to database directory: ${dbDir}`)
   }
 
-  db = new Database(DB_PATH)
+  try {
+    db = new Database(DB_PATH)
+    console.log('[DB] Database opened successfully')
 
-  // Enable WAL mode for better concurrency (optional but recommended)
-  db.pragma('journal_mode = WAL')
+    // Enable WAL mode for better concurrency (optional but recommended)
+    db.pragma('journal_mode = WAL')
 
-  // Create table if it doesn't exist
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      text TEXT NOT NULL CHECK(length(text) > 0 AND length(text) <= 280),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
+    // Create table if it doesn't exist
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        text TEXT NOT NULL CHECK(length(text) > 0 AND length(text) <= 280),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    
+    console.log('[DB] Table initialized')
+  } catch (err) {
+    console.error('[DB] Failed to open database:', err)
+    throw err
+  }
 
   return db
 }
