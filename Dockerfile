@@ -1,43 +1,47 @@
-# Multi-stage build for a minimal, secure production image
+# Multi-stage Dockerfile for Next.js production build
 
-# ---------- BUILD STAGE ----------
-FROM node:18-alpine AS builder
-
-# Create app dir
+# ---------- DEPENDENCIES ----------
+FROM node:20-alpine AS deps
+# Install build dependencies for native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++
 WORKDIR /app
-
-# Install build deps
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm ci
 
-# Copy source and build
+# ---------- BUILDER ----------
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Next.js collects anonymous telemetry; disable it
+ENV NEXT_TELEMETRY_DISABLED=1
+
 RUN npm run build
 
-# ---------- RUN TIME STAGE ----------
-FROM node:18-alpine AS runner
+# ---------- RUNNER ----------
+FROM node:20-alpine AS runner
+WORKDIR /app
 
-# Set working dir and copy built files and prod dependencies into the image
-WORKDIR /home/node/app
-
-# Set NODE_ENV to production
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy production node_modules from builder
-COPY --from=builder /app/node_modules ./node_modules
+# Create data directory for SQLite and ensure node user can write to it
+RUN mkdir -p /data && chown -R node:node /data
 
-# Copy built files
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./package.json
+# Copy Next.js build artifacts (standalone mode)
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 
-# Expose runtime port
-EXPOSE 3000
-
-# Health-check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q -O- http://localhost:3000/api/health || exit 1
-
-# Use the non-root node user for runtime
 USER node
 
-CMD ["node", "dist/index.js"]
+EXPOSE 3000
+
+ENV PORT=3000
+ENV SQLITE_DB_PATH=/data/db.sqlite
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/hello || exit 1
+
+CMD ["node", "server.js"]

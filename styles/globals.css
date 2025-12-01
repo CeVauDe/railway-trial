@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+html, body, #__next { height: 100%; }
+
+body {
+  background: linear-gradient(135deg, #0f172a 0%, #0b1220 50%, #0b1220 100%);
+  color: #e6eef6;
+  -webkit-font-smoothing: antialiased;
+}
