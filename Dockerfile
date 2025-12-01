@@ -26,15 +26,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create data directory for SQLite and ensure node user can write to it
-RUN mkdir -p /data && chown -R node:node /data
-
 # Copy Next.js build artifacts (standalone mode)
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 
-USER node
+# Ensure /data directory exists with proper permissions for the mounted volume
+# Run as root to set up the directory, then switch to node user
+RUN mkdir -p /data && chmod 777 /data
 
 EXPOSE 3000
 

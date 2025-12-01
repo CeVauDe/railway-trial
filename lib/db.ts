@@ -21,13 +21,9 @@ function initDb() {
       console.log('[DB] Creating directory:', dbDir)
       fs.mkdirSync(dbDir, { recursive: true })
     }
-    
-    // Check write permissions
-    fs.accessSync(dbDir, fs.constants.W_OK)
-    console.log('[DB] Directory is writable')
   } catch (err) {
-    console.error('[DB] Cannot write to directory:', dbDir, err)
-    throw new Error(`Cannot write to database directory: ${dbDir}`)
+    console.error('[DB] Failed to create directory:', dbDir, err)
+    throw new Error(`Cannot create database directory: ${dbDir}`)
   }
 
   try {
